@@ -6,7 +6,8 @@ const express = require('express');
 const PORT = process.env.PORT || 3000;
 const app = express();
 
-const conString = 'postgres://localhost:5432';
+// const conString = 'postgres://localhost:5432';
+const conString = 'postgres://postgres:1111@localhost:5432/kilovolt';
 const client = new pg.Client(conString);
 client.connect();
 client.on('error', error => {
@@ -19,7 +20,7 @@ app.use(express.static('./public'));
 
 // REVIEW: These are routes for requesting HTML resources.
 app.get('/new', (request, response) => {
-  response.sendFile('new.html', {root: './public'});
+  response.sendFile('new.html', { root: './public' });
 });
 
 // REVIEW: These are routes for making API calls to enact CRUD operations on our database.
@@ -36,14 +37,14 @@ app.get('/articles', (request, response) => {
 app.post('/articles', (request, response) => {
   client.query(
     `INSERT INTO
-     authors(author, author_url)
+     authors(author, "authorUrl")
      VALUES($1, $2);
-    `
+    `,
     [request.body.author,
     request.body.authorUrl
-  ],
-  
-    function(err) {
+    ],
+
+    function (err) {
       if (err) console.error(err);
       // REVIEW: This is our second query, to be executed when this first query is complete.
       queryTwo();
@@ -52,20 +53,18 @@ app.post('/articles', (request, response) => {
 
   function queryTwo() {
     client.query(
-      `INSERT INTO
-      articles(title,  category, published_on, body)    
-      VALUES ($1, $2, $3, $4);
-      `,
+      `SELECT author_id FROM authors
+      WHERE author = $1;`,
       [
-        request.body.title,
-        request.body.category,
-        request.body.publishedOn,
-        request.body.body
+        request.body.author
       ],
-      function(err, result) {
+
+      function (err, result) {
         if (err) console.error(err);
 
         // REVIEW: This is our third query, to be executed when the second is complete. We are also passing the author_id into our third query.
+        console.log(result);
+        console.log(result.rows);       
         queryThree(result.rows[0].author_id);
       }
     )
@@ -73,9 +72,17 @@ app.post('/articles', (request, response) => {
 
   function queryThree(author_id) {
     client.query(
-      ``,
-      [],
-      function(err) {
+      `INSERT INTO 
+      articles(title, category, "publishedOn", body, author_id)
+      VALUES ($1, $2, $3, $4, $5);`,
+      [
+        request.body.title,
+        request.body.category,
+        request.body.publishedOn,
+        request.body.body,
+        author_id
+      ],
+      function (err) {
         if (err) console.error(err);
         response.send('insert complete');
       }
@@ -83,7 +90,7 @@ app.post('/articles', (request, response) => {
   }
 });
 
-app.put('/articles/:id', function(request, response) {
+app.put('/articles/:id', function (request, response) {
   client.query(
     ``,
     []
@@ -152,7 +159,7 @@ function loadAuthors() {
 function loadArticles() {
   client.query('SELECT COUNT(*) FROM articles')
     .then(result => {
-      if(!parseInt(result.rows[0].count)) {
+      if (!parseInt(result.rows[0].count)) {
         fs.readFile('./public/data/hackerIpsum.json', 'utf8', (err, fd) => {
           JSON.parse(fd).forEach(ele => {
             client.query(`
